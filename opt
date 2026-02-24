@@ -1,0 +1,40 @@
+import os
+from telegram import Bot
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+
+PLAN = int(os.environ["PLAN"])
+TOKEN = os.environ["TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
+
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive",
+]
+
+creds = ServiceAccountCredentials.from_json_keyfile_dict(
+    eval(os.environ["GOOGLE_CREDENTIALS"]), scope
+)
+
+client = gspread.authorize(creds)
+sheet = client.open(os.environ["SHEET_NAME"]).sheet1
+rows = sheet.get_all_records()
+
+today = datetime.now().strftime("%d.%m.%Y")
+
+fact = sum(row["Сумма"] for row in rows if row["Дата"] == today)
+
+percent = round(fact / PLAN * 100, 1) if PLAN else 0
+left = PLAN - fact
+
+message = f"""
+📊 Итог за {today}
+
+🎯 План: {PLAN}
+📈 Выполнение: {percent}%
+🔥 До плана: {left}
+"""
+
+bot = Bot(token=TOKEN)
+bot.send_message(chat_id=CHAT_ID, text=message)
