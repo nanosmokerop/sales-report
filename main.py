@@ -27,7 +27,6 @@ current_month = "ОПТ Февраль 2026"
 
 # 🔥 Берём лист текущего месяца
 sales_sheet = spreadsheet.worksheet(current_month)
-plans_sheet = spreadsheet.worksheet("Годовой план 26")
 
 rows = sales_sheet.get_all_values()
 
@@ -57,8 +56,6 @@ for row in data_rows:
         "Дата": date,
         "Сумма": amount
     })
-plans = plans_sheet.get_all_records()
-
 managers = list(set(row["Менеджер"] for row in sales))
 
 message = f"📊 Отчёт за {today_str}\n\n"
@@ -76,13 +73,11 @@ for manager in managers:
         if row["Менеджер"] == manager
     )
 
-    plan = next(
-        (row["План"] for row in plans
-         if row["Менеджер"] == manager and row["Месяц"] == current_month),
-        0
-    )
-
-    percent = round(month_sum / plan * 100, 1) if plan else 0
+message += (
+    f"{manager}\n"
+    f"Сегодня: {today_sum}\n"
+    f"Месяц: {month_sum}\n\n"
+)
 
     message += (
         f"{manager}\n"
