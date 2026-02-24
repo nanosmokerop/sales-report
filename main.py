@@ -1,4 +1,5 @@
 import os
+import re
 from telegram import Bot
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -23,14 +24,15 @@ spreadsheet = client.open(SHEET_NAME)
 
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
+
+# ⚠️ МЕНЯТЬ КАЖДЫЙ МЕСЯЦ
 current_month = "ОПТ Февраль 2026"
 
-# 🔥 Берём лист текущего месяца
 sales_sheet = spreadsheet.worksheet(current_month)
 
 rows = sales_sheet.get_all_values()
 
-# данные начинаются с 5 строки (по твоему скрину)
+# данные начинаются с 5 строки (как у тебя на скрине)
 data_rows = rows[4:]
 
 sales = []
@@ -47,17 +49,20 @@ for row in data_rows:
         continue
 
     try:
-        amount = float(str(amount).replace(" ", "").replace(",", "."))
+        # очищаем "р. 85 675" → 85675
+        cleaned = re.sub(r"[^\d.,]", "", str(amount))
+        cleaned = cleaned.replace(" ", "").replace(",", ".")
+        amount = float(cleaned)
     except:
         amount = 0
 
     sales.append({
-        "Менеджер": manager,
-        "Дата": date,
+        "Менеджер": manager.strip(),
+        "Дата": date.strip(),
         "Сумма": amount
     })
 
-managers = list(set(row["Менеджер"] for row in sales))
+managers = sorted(list(set(row["Менеджер"] for row in sales)))
 
 message = f"📊 Отчёт за {today_str}\n\n"
 
@@ -76,8 +81,8 @@ for manager in managers:
 
     message += (
         f"{manager}\n"
-        f"Сегодня: {today_sum}\n"
-        f"Месяц: {month_sum}\n\n"
+        f"Сегодня: {int(today_sum):,}\n"
+        f"Месяц: {int(month_sum):,}\n\n"
     )
 
 # Проверка последний ли день месяца
