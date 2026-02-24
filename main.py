@@ -1,15 +1,20 @@
 import os
-import re
 from telegram import Bot
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import calendar
 
+# ===== НАСТРОЙКИ =====
+
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
-PLAN = float(os.environ["PLAN"])  # 🔥 общий план
+PLAN = int(os.environ["PLAN"])  # например 2300000
+
+current_month = "ОПТ Февраль 2026"  # ← меняешь вручную раз в месяц
+
+# ===== GOOGLE SHEETS =====
 
 scope = [
     "https://spreadsheets.google.com/feeds",
@@ -23,72 +28,75 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(
 client = gspread.authorize(creds)
 spreadsheet = client.open(SHEET_NAME)
 
+sales_sheet = spreadsheet.worksheet(current_month)
+
+# Берём ВСЕ строки начиная со 2-й (игнорируем кривые заголовки)
+sales = sales_sheet.get_all_values()[1:]
+
+# ===== ДАТА =====
+
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
 
-# ⚠️ Меняй каждый месяц
-current_month = "ОПТ Февраль 2026"
+# ===== СОБИРАЕМ МЕНЕДЖЕРОВ =====
 
-sales_sheet = spreadsheet.worksheet(current_month)
-rows = sales_sheet.get_all_values()
-
-data_rows = rows[4:]
-
-sales = []
-
-for row in data_rows:
-    if len(row) < 10:
-        continue
-
-    manager = row[0]
-    date = row[1]
-    amount = row[9]
-
-    if not manager or not amount:
-        continue
-
-    try:
-        cleaned = re.sub(r"[^\d.,]", "", str(amount))
-        cleaned = cleaned.replace(" ", "").replace(",", ".")
-        amount = float(cleaned)
-    except:
-        amount = 0
-
-    sales.append({
-        "Менеджер": manager.strip(),
-        "Дата": date.strip(),
-        "Сумма": amount
-    })
-
-managers = sorted(list(set(row["Менеджер"] for row in sales)))
+managers = list(set(row[0] for row in sales if row[0]))
 
 message = f"📊 Отчёт за {today_str}\n\n"
 
+# ===== РАСЧЁТ =====
+
 for manager in managers:
-    today_sum = sum(
-        row["Сумма"]
-        for row in sales
-        if row["Менеджер"] == manager and row["Дата"] == today_str
-    )
 
-    month_sum = sum(
-        row["Сумма"]
-        for row in sales
-        if row["Менеджер"] == manager
-    )
+    today_sum = 0
+    month_sum = 0
 
-    percent = round((month_sum / PLAN) * 100, 1) if PLAN else 0
+    for row in sales:
+
+        row_manager = row[0]              # Менеджер
+        payment_date = row[8]             # Дата оплаты (колонка I)
+        raw_sum = row[9]                  # Оплата (колонка J)
+
+        if row_manager != manager:
+            continue
+
+        # очищаем сумму
+        if isinstance(raw_sum, str):
+            raw_sum = (
+                raw_sum
+                .replace("р.", "")
+                .replace("р", "")
+                .replace(" ", "")
+                .replace(",", ".")
+                .strip()
+            )
+
+        try:
+            amount = float(raw_sum)
+        except:
+            amount = 0
+
+        month_sum += amount
+
+        if payment_date == today_str:
+            today_sum += amount
+
+    percent = round(month_sum / PLAN * 100, 1) if PLAN else 0
 
     message += (
         f"{manager}\n"
         f"Сегодня: {int(today_sum):,}\n"
-        f"Месяц: {int(month_sum):,} / {int(PLAN):,}\n"
+        f"Месяц: {int(month_sum):,} / {PLAN:,}\n"
         f"Выполнение: {percent}%\n\n"
     )
+
+# ===== ПРОВЕРКА ПОСЛЕДНИЙ ЛИ ДЕНЬ =====
 
 last_day = calendar.monthrange(today.year, today.month)[1]
 if today.day == last_day:
     message += "🏁 Итог месяца сформирован\n"
+
+# ===== ОТПРАВКА В TELEGRAM =====
 
 bot = Bot(token=TOKEN)
 bot.send_message(chat_id=CHAT_ID, text=message)
