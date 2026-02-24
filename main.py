@@ -10,7 +10,6 @@ CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
 PLAN = int(os.environ["PLAN"])
 
-# 👇 МЕНЯЙ КАЖДЫЙ МЕСЯЦ НАЗВАНИЕ ЛИСТА
 current_month = "ОПТ Февраль 2026"
 
 scope = [
@@ -26,26 +25,37 @@ client = gspread.authorize(creds)
 spreadsheet = client.open(SHEET_NAME)
 sheet = spreadsheet.worksheet(current_month)
 
-# 🔥 Читаем ВСЮ таблицу
 all_rows = sheet.get_all_values()
 
-# ✅ Заголовки в первой строке
-headers = all_rows[0]
+# 🔥 объединяем 1 и 2 строку заголовков
+header_row_1 = all_rows[0]
+header_row_2 = all_rows[1] if len(all_rows) > 1 else []
 
-# Находим нужные колонки
-manager_col = headers.index("Менеджер")
-payment_date_col = headers.index("Дата оплаты")
-payment_col = headers.index("Оплата")
+headers = []
+for i in range(max(len(header_row_1), len(header_row_2))):
+    part1 = header_row_1[i] if i < len(header_row_1) else ""
+    part2 = header_row_2[i] if i < len(header_row_2) else ""
+    headers.append((part1 + " " + part2).strip())
+
+# 🔥 универсальный поиск колонки
+def find_column(keyword):
+    for i, col in enumerate(headers):
+        if keyword.lower() in col.lower():
+            return i
+    raise Exception(f"Колонка с текстом '{keyword}' не найдена")
+
+manager_col = find_column("менеджер")
+payment_date_col = find_column("дата оплат")
+payment_col = find_column("оплат")
 
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
 
 clean_rows = []
 
-# Данные начинаются со второй строки
-for row in all_rows[1:]:
+# данные начинаются с 3 строки
+for row in all_rows[2:]:
 
-    # защита от коротких строк
     if len(row) <= max(manager_col, payment_date_col, payment_col):
         continue
 
@@ -56,7 +66,6 @@ for row in all_rows[1:]:
     if not manager or not payment_date or not raw_sum:
         continue
 
-    # очищаем "р. 85 675"
     raw_sum = (
         raw_sum
         .replace("р.", "")
@@ -73,7 +82,6 @@ for row in all_rows[1:]:
 
     clean_rows.append((manager, payment_date, amount))
 
-# Уникальные менеджеры
 managers = list(set(row[0] for row in clean_rows))
 
 message = f"📊 Отчёт за {today_str}\n\n"
@@ -103,7 +111,6 @@ for manager in managers:
         f"Выполнение: {percent}%\n\n"
     )
 
-# Если последний день месяца
 last_day = calendar.monthrange(today.year, today.month)[1]
 if today.day == last_day:
     message += "🏁 Итог месяца сформирован\n"
