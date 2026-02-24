@@ -26,36 +26,19 @@ spreadsheet = client.open(SHEET_NAME)
 sheet = spreadsheet.worksheet(current_month)
 
 all_rows = sheet.get_all_values()
+data_rows = all_rows[2:]  # пропускаем 2 строки заголовка
 
-header_row_1 = all_rows[0]
-header_row_2 = all_rows[1]
-
-headers = []
-for i in range(len(header_row_1)):
-    part1 = header_row_1[i] if i < len(header_row_1) else ""
-    part2 = header_row_2[i] if i < len(header_row_2) else ""
-    headers.append((part1 + " " + part2).strip().lower())
-
-
-def find_column(keyword):
-    for i, col in enumerate(headers):
-        if keyword in col:
-            return i
-    raise Exception(f"Колонка '{keyword}' не найдена")
-
-
-manager_col = find_column("менеджер")
-date_col = find_column("дата")
-payment_col = find_column("оплат")
+# 🔥 фиксированные индексы
+manager_col = 0      # колонка A
+date_col = 8         # колонка I
+payment_col = 9      # колонка J
 
 today = datetime.now().date()
-data_rows = all_rows[2:]
-
 managers_data = {}
 
 for row in data_rows:
 
-    if len(row) <= max(manager_col, date_col, payment_col):
+    if len(row) <= payment_col:
         continue
 
     manager = row[manager_col].strip()
@@ -65,19 +48,14 @@ for row in data_rows:
     if not manager or not date_raw or not sum_raw:
         continue
 
-    # --- ПАРСИНГ ДАТЫ ---
+    # --- ДАТА ---
     payment_date = None
 
-    # если число (google serial date)
+    # если google serial number
     if date_raw.isdigit():
-        try:
-            serial = int(date_raw)
-            payment_date = datetime(1899, 12, 30) + timedelta(days=serial)
-            payment_date = payment_date.date()
-        except:
-            continue
+        serial = int(date_raw)
+        payment_date = (datetime(1899, 12, 30) + timedelta(days=serial)).date()
     else:
-        # если строка
         for fmt in ("%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d"):
             try:
                 payment_date = datetime.strptime(date_raw, fmt).date()
@@ -88,8 +66,8 @@ for row in data_rows:
     if not payment_date:
         continue
 
-    # --- ПАРСИНГ СУММЫ ---
-    sum_raw = (
+    # --- СУММА ---
+    sum_clean = (
         sum_raw.replace("р.", "")
         .replace("р", "")
         .replace(" ", "")
@@ -97,7 +75,7 @@ for row in data_rows:
     )
 
     try:
-        amount = float(sum_raw)
+        amount = float(sum_clean)
     except:
         continue
 
