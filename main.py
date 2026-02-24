@@ -30,18 +30,18 @@ sales_sheet = spreadsheet.worksheet(current_month)
 
 rows = sales_sheet.get_all_values()
 
-# предполагаем что данные начинаются с 5 строки
-data_rows = rows[4:]  
+# данные начинаются с 5 строки (по твоему скрину)
+data_rows = rows[4:]
 
 sales = []
 
 for row in data_rows:
-    if len(row) < 3:
+    if len(row) < 10:
         continue
 
-    manager = row[0]        # колонка A — Менеджер
-    date = row[1]           # колонка B — Дата оформления
-    amount = row[9]         # колонка J — Оплата (проверь номер!)
+    manager = row[0]      # колонка A
+    date = row[1]         # колонка B
+    amount = row[9]       # колонка J (Оплата)
 
     if not manager or not amount:
         continue
@@ -56,6 +56,7 @@ for row in data_rows:
         "Дата": date,
         "Сумма": amount
     })
+
 managers = list(set(row["Менеджер"] for row in sales))
 
 message = f"📊 Отчёт за {today_str}\n\n"
@@ -73,17 +74,10 @@ for manager in managers:
         if row["Менеджер"] == manager
     )
 
-message += (
-    f"{manager}\n"
-    f"Сегодня: {today_sum}\n"
-    f"Месяц: {month_sum}\n\n"
-)
-
     message += (
         f"{manager}\n"
         f"Сегодня: {today_sum}\n"
-        f"Месяц: {month_sum} / {plan}\n"
-        f"Выполнение: {percent}%\n\n"
+        f"Месяц: {month_sum}\n\n"
     )
 
 # Проверка последний ли день месяца
