@@ -10,7 +10,7 @@ CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
 PLAN = int(os.environ["PLAN"])
 
-current_month = "ОПТ Февраль 2026"
+current_month = "ОПТ Февраль 2026"  # 👈 меняй каждый месяц
 
 scope = [
     "https://spreadsheets.google.com/feeds",
@@ -27,7 +27,7 @@ sheet = spreadsheet.worksheet(current_month)
 
 all_rows = sheet.get_all_values()
 
-# 🔥 объединяем 1 и 2 строку заголовков
+# === ОБЪЕДИНЯЕМ 1 И 2 СТРОКУ ЗАГОЛОВКОВ ===
 header_row_1 = all_rows[0]
 header_row_2 = all_rows[1] if len(all_rows) > 1 else []
 
@@ -37,12 +37,13 @@ for i in range(max(len(header_row_1), len(header_row_2))):
     part2 = header_row_2[i] if i < len(header_row_2) else ""
     headers.append((part1 + " " + part2).strip())
 
-# 🔥 универсальный поиск колонки
+
 def find_column(keyword):
     for i, col in enumerate(headers):
         if keyword.lower() in col.lower():
             return i
     raise Exception(f"Колонка с текстом '{keyword}' не найдена")
+
 
 manager_col = find_column("менеджер")
 payment_date_col = find_column("дата оплат")
@@ -53,7 +54,7 @@ today_str = today.strftime("%d.%m.%Y")
 
 clean_rows = []
 
-# данные начинаются с 3 строки
+# === ДАННЫЕ НАЧИНАЮТСЯ С 3 СТРОКИ ===
 for row in all_rows[2:]:
 
     if len(row) <= max(manager_col, payment_date_col, payment_col):
@@ -66,6 +67,15 @@ for row in all_rows[2:]:
     if not manager or not payment_date or not raw_sum:
         continue
 
+    # === ИСПРАВЛЯЕМ ФОРМАТ ДАТЫ 09.02.26 → 09.02.2026 ===
+    try:
+        parts = payment_date.split(".")
+        if len(parts[2]) == 2:
+            payment_date = parts[0] + "." + parts[1] + ".20" + parts[2]
+    except:
+        pass
+
+    # === ОЧИЩАЕМ СУММУ ===
     raw_sum = (
         raw_sum
         .replace("р.", "")
@@ -82,38 +92,42 @@ for row in all_rows[2:]:
 
     clean_rows.append((manager, payment_date, amount))
 
-managers = list(set(row[0] for row in clean_rows))
+if not clean_rows:
+    message = f"📊 Отчёт за {today_str}\n\nНет данных для расчёта."
+else:
 
-message = f"📊 Отчёт за {today_str}\n\n"
+    managers = sorted(list(set(row[0] for row in clean_rows)))
 
-for manager in managers:
+    message = f"📊 Отчёт за {today_str}\n\n"
 
-    today_sum = 0
-    month_sum = 0
+    for manager in managers:
 
-    for row in clean_rows:
-        row_manager, payment_date, amount = row
+        today_sum = 0
+        month_sum = 0
 
-        if row_manager != manager:
-            continue
+        for row in clean_rows:
+            row_manager, payment_date, amount = row
 
-        month_sum += amount
+            if row_manager != manager:
+                continue
 
-        if payment_date == today_str:
-            today_sum += amount
+            month_sum += amount
 
-    percent = round(month_sum / PLAN * 100, 1) if PLAN else 0
+            if payment_date == today_str:
+                today_sum += amount
 
-    message += (
-        f"{manager}\n"
-        f"Сегодня: {int(today_sum):,}\n"
-        f"Месяц: {int(month_sum):,} / {PLAN:,}\n"
-        f"Выполнение: {percent}%\n\n"
-    )
+        percent = round(month_sum / PLAN * 100, 1) if PLAN else 0
 
-last_day = calendar.monthrange(today.year, today.month)[1]
-if today.day == last_day:
-    message += "🏁 Итог месяца сформирован\n"
+        message += (
+            f"{manager}\n"
+            f"Сегодня: {int(today_sum):,}\n"
+            f"Месяц: {int(month_sum):,} / {PLAN:,}\n"
+            f"Выполнение: {percent}%\n\n"
+        )
+
+    last_day = calendar.monthrange(today.year, today.month)[1]
+    if today.day == last_day:
+        message += "🏁 Итог месяца сформирован\n"
 
 bot = Bot(token=TOKEN)
 bot.send_message(chat_id=CHAT_ID, text=message)
