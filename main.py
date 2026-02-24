@@ -29,7 +29,34 @@ current_month = "ОПТ Февраль 2026"
 sales_sheet = spreadsheet.worksheet(current_month)
 plans_sheet = spreadsheet.worksheet("Годовой план 26")
 
-sales = sales_sheet.get_all_records()
+rows = sales_sheet.get_all_values()
+
+# предполагаем что данные начинаются с 5 строки
+data_rows = rows[4:]  
+
+sales = []
+
+for row in data_rows:
+    if len(row) < 3:
+        continue
+
+    manager = row[0]        # колонка A — Менеджер
+    date = row[1]           # колонка B — Дата оформления
+    amount = row[9]         # колонка J — Оплата (проверь номер!)
+
+    if not manager or not amount:
+        continue
+
+    try:
+        amount = float(str(amount).replace(" ", "").replace(",", "."))
+    except:
+        amount = 0
+
+    sales.append({
+        "Менеджер": manager,
+        "Дата": date,
+        "Сумма": amount
+    })
 plans = plans_sheet.get_all_records()
 
 managers = list(set(row["Менеджер"] for row in sales))
