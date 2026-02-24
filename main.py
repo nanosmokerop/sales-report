@@ -10,9 +10,9 @@ import calendar
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
-PLAN = int(os.environ["PLAN"])  # например 2300000
+PLAN = int(os.environ["PLAN"])
 
-current_month = "ОПТ Февраль 2026"  # ← меняешь вручную раз в месяц
+current_month = "ОПТ Февраль 2026"
 
 # ===== GOOGLE SHEETS =====
 
@@ -27,20 +27,54 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(
 
 client = gspread.authorize(creds)
 spreadsheet = client.open(SHEET_NAME)
-
 sales_sheet = spreadsheet.worksheet(current_month)
 
-# Берём ВСЕ строки начиная со 2-й (игнорируем кривые заголовки)
 sales = sales_sheet.get_all_values()[1:]
-
-# ===== ДАТА =====
 
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
 
-# ===== СОБИРАЕМ МЕНЕДЖЕРОВ =====
+# ===== ФИЛЬТРУЕМ ТОЛЬКО РЕАЛЬНЫЕ ПРОДАЖИ =====
 
-managers = list(set(row[0] for row in sales if row[0]))
+clean_rows = []
+
+for row in sales:
+
+    if len(row) < 10:
+        continue
+
+    manager = row[0].strip()
+    payment_date = row[8].strip()
+    raw_sum = row[9].strip()
+
+    if not manager:
+        continue
+
+    if not payment_date:
+        continue
+
+    if not raw_sum:
+        continue
+
+    # чистим сумму
+    raw_sum = (
+        raw_sum
+        .replace("р.", "")
+        .replace("р", "")
+        .replace(" ", "")
+        .replace(",", ".")
+        .strip()
+    )
+
+    try:
+        amount = float(raw_sum)
+    except:
+        continue
+
+    clean_rows.append((manager, payment_date, amount))
+
+# получаем список менеджеров
+managers = list(set(row[0] for row in clean_rows))
 
 message = f"📊 Отчёт за {today_str}\n\n"
 
@@ -51,30 +85,12 @@ for manager in managers:
     today_sum = 0
     month_sum = 0
 
-    for row in sales:
+    for row in clean_rows:
 
-        row_manager = row[0]              # Менеджер
-        payment_date = row[8]             # Дата оплаты (колонка I)
-        raw_sum = row[9]                  # Оплата (колонка J)
+        row_manager, payment_date, amount = row
 
         if row_manager != manager:
             continue
-
-        # очищаем сумму
-        if isinstance(raw_sum, str):
-            raw_sum = (
-                raw_sum
-                .replace("р.", "")
-                .replace("р", "")
-                .replace(" ", "")
-                .replace(",", ".")
-                .strip()
-            )
-
-        try:
-            amount = float(raw_sum)
-        except:
-            amount = 0
 
         month_sum += amount
 
@@ -90,13 +106,11 @@ for manager in managers:
         f"Выполнение: {percent}%\n\n"
     )
 
-# ===== ПРОВЕРКА ПОСЛЕДНИЙ ЛИ ДЕНЬ =====
+# ===== ПОСЛЕДНИЙ ДЕНЬ МЕСЯЦА =====
 
 last_day = calendar.monthrange(today.year, today.month)[1]
 if today.day == last_day:
     message += "🏁 Итог месяца сформирован\n"
-
-# ===== ОТПРАВКА В TELEGRAM =====
 
 bot = Bot(token=TOKEN)
 bot.send_message(chat_id=CHAT_ID, text=message)
