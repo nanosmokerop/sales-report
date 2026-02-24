@@ -25,26 +25,32 @@ client = gspread.authorize(creds)
 spreadsheet = client.open(SHEET_NAME)
 sheet = spreadsheet.worksheet(current_month)
 
-data = sheet.get_all_records()
+# 🔥 ЧИТАЕМ ВСЁ КАК ЕСТЬ
+all_rows = sheet.get_all_values()
+
+# 2 строка — реальные заголовки (у тебя именно там)
+headers = all_rows[1]
+
+# Находим нужные колонки
+manager_col = headers.index("Менеджер")
+payment_date_col = headers.index("Дата оплаты")
+payment_col = headers.index("Оплата")
 
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
 
 clean_rows = []
 
-for row in data:
+for row in all_rows[2:]:  # начинаем с 3 строки (где данные)
 
-    manager = str(row.get("Менеджер", "")).strip()
-    payment_date = str(row.get("Дата оплаты", "")).strip()
-    raw_sum = str(row.get("Оплата", "")).strip()
-
-    if not manager:
+    try:
+        manager = row[manager_col].strip()
+        payment_date = row[payment_date_col].strip()
+        raw_sum = row[payment_col].strip()
+    except:
         continue
 
-    if not payment_date:
-        continue
-
-    if not raw_sum:
+    if not manager or not payment_date or not raw_sum:
         continue
 
     raw_sum = (
