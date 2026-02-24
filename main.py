@@ -10,7 +10,7 @@ CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
 PLAN = int(os.environ["PLAN"])
 
-current_month = "ОПТ Февраль 2026"  # 👈 меняй каждый месяц
+current_month = "ОПТ Февраль 2026"  # меняй каждый месяц
 
 scope = [
     "https://spreadsheets.google.com/feeds",
@@ -27,101 +27,96 @@ sheet = spreadsheet.worksheet(current_month)
 
 all_rows = sheet.get_all_values()
 
-# === ОБЪЕДИНЯЕМ 1 И 2 СТРОКУ ЗАГОЛОВКОВ ===
+# --- объединяем 1 и 2 строку заголовков ---
 header_row_1 = all_rows[0]
-header_row_2 = all_rows[1] if len(all_rows) > 1 else []
+header_row_2 = all_rows[1]
 
 headers = []
-for i in range(max(len(header_row_1), len(header_row_2))):
+for i in range(len(header_row_1)):
     part1 = header_row_1[i] if i < len(header_row_1) else ""
     part2 = header_row_2[i] if i < len(header_row_2) else ""
-    headers.append((part1 + " " + part2).strip())
-
+    headers.append((part1 + " " + part2).strip().lower())
 
 def find_column(keyword):
     for i, col in enumerate(headers):
-        if keyword.lower() in col.lower():
+        if keyword in col:
             return i
-    raise Exception(f"Колонка с текстом '{keyword}' не найдена")
-
+    raise Exception(f"Колонка '{keyword}' не найдена")
 
 manager_col = find_column("менеджер")
-payment_date_col = find_column("дата оплат")
+date_col = find_column("дата")
 payment_col = find_column("оплат")
 
-today = datetime.now()
-today_str = today.strftime("%d.%m.%Y")
+today = datetime.now().date()
 
-clean_rows = []
+data_rows = all_rows[2:]
 
-# === ДАННЫЕ НАЧИНАЮТСЯ С 3 СТРОКИ ===
-for row in all_rows[2:]:
+managers_data = {}
 
-    if len(row) <= max(manager_col, payment_date_col, payment_col):
+for row in data_rows:
+
+    if len(row) <= max(manager_col, date_col, payment_col):
         continue
 
     manager = row[manager_col].strip()
-    payment_date = row[payment_date_col].strip()
-    raw_sum = row[payment_col].strip()
+    date_raw = row[date_col].strip()
+    sum_raw = row[payment_col].strip()
 
-    if not manager or not payment_date or not raw_sum:
+    if not manager or not date_raw or not sum_raw:
         continue
 
-    # === ИСПРАВЛЯЕМ ФОРМАТ ДАТЫ 09.02.26 → 09.02.2026 ===
+    # --- конвертация даты ---
     try:
-        parts = payment_date.split(".")
-        if len(parts[2]) == 2:
-            payment_date = parts[0] + "." + parts[1] + ".20" + parts[2]
+        payment_date = datetime.strptime(date_raw, "%d.%m.%Y").date()
     except:
-        pass
+        try:
+            payment_date = datetime.strptime(date_raw, "%d.%m.%y").date()
+        except:
+            continue
 
-    # === ОЧИЩАЕМ СУММУ ===
-    raw_sum = (
-        raw_sum
-        .replace("р.", "")
+    # --- чистка суммы ---
+    sum_raw = (
+        sum_raw.replace("р.", "")
         .replace("р", "")
         .replace(" ", "")
         .replace(",", ".")
-        .strip()
     )
 
     try:
-        amount = float(raw_sum)
+        amount = float(sum_raw)
     except:
         continue
 
-    clean_rows.append((manager, payment_date, amount))
+    if manager not in managers_data:
+        managers_data[manager] = {
+            "today": 0,
+            "month": 0
+        }
 
-if not clean_rows:
-    message = f"📊 Отчёт за {today_str}\n\nНет данных для расчёта."
+    # считаем месяц
+    if payment_date.month == today.month and payment_date.year == today.year:
+        managers_data[manager]["month"] += amount
+
+        # считаем сегодня
+        if payment_date == today:
+            managers_data[manager]["today"] += amount
+
+
+# --- формируем сообщение ---
+today_str = today.strftime("%d.%m.%Y")
+message = f"📊 Отчёт за {today_str}\n\n"
+
+if not managers_data:
+    message += "Нет данных для расчёта."
 else:
+    for manager, data in managers_data.items():
 
-    managers = sorted(list(set(row[0] for row in clean_rows)))
-
-    message = f"📊 Отчёт за {today_str}\n\n"
-
-    for manager in managers:
-
-        today_sum = 0
-        month_sum = 0
-
-        for row in clean_rows:
-            row_manager, payment_date, amount = row
-
-            if row_manager != manager:
-                continue
-
-            month_sum += amount
-
-            if payment_date == today_str:
-                today_sum += amount
-
-        percent = round(month_sum / PLAN * 100, 1) if PLAN else 0
+        percent = round(data["month"] / PLAN * 100, 1) if PLAN else 0
 
         message += (
             f"{manager}\n"
-            f"Сегодня: {int(today_sum):,}\n"
-            f"Месяц: {int(month_sum):,} / {PLAN:,}\n"
+            f"Сегодня: {int(data['today']):,}\n"
+            f"Месяц: {int(data['month']):,} / {PLAN:,}\n"
             f"Выполнение: {percent}%\n\n"
         )
 
