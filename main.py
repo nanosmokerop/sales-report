@@ -5,16 +5,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import calendar
 
-# ===== НАСТРОЙКИ =====
-
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
 PLAN = int(os.environ["PLAN"])
 
 current_month = "ОПТ Февраль 2026"
-
-# ===== GOOGLE SHEETS =====
 
 scope = [
     "https://spreadsheets.google.com/feeds",
@@ -27,25 +23,20 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(
 
 client = gspread.authorize(creds)
 spreadsheet = client.open(SHEET_NAME)
-sales_sheet = spreadsheet.worksheet(current_month)
+sheet = spreadsheet.worksheet(current_month)
 
-sales = sales_sheet.get_all_values()[1:]
+data = sheet.get_all_records()
 
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
 
-# ===== ФИЛЬТРУЕМ ТОЛЬКО РЕАЛЬНЫЕ ПРОДАЖИ =====
-
 clean_rows = []
 
-for row in sales:
+for row in data:
 
-    if len(row) < 10:
-        continue
-
-    manager = row[0].strip()
-    payment_date = row[8].strip()
-    raw_sum = row[9].strip()
+    manager = str(row.get("Менеджер", "")).strip()
+    payment_date = str(row.get("Дата оплаты", "")).strip()
+    raw_sum = str(row.get("Оплата", "")).strip()
 
     if not manager:
         continue
@@ -56,7 +47,6 @@ for row in sales:
     if not raw_sum:
         continue
 
-    # чистим сумму
     raw_sum = (
         raw_sum
         .replace("р.", "")
@@ -73,12 +63,9 @@ for row in sales:
 
     clean_rows.append((manager, payment_date, amount))
 
-# получаем список менеджеров
 managers = list(set(row[0] for row in clean_rows))
 
 message = f"📊 Отчёт за {today_str}\n\n"
-
-# ===== РАСЧЁТ =====
 
 for manager in managers:
 
@@ -105,8 +92,6 @@ for manager in managers:
         f"Месяц: {int(month_sum):,} / {PLAN:,}\n"
         f"Выполнение: {percent}%\n\n"
     )
-
-# ===== ПОСЛЕДНИЙ ДЕНЬ МЕСЯЦА =====
 
 last_day = calendar.monthrange(today.year, today.month)[1]
 if today.day == last_day:
