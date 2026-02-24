@@ -27,7 +27,7 @@ current_month = "ОПТ Февраль 2026"
 
 # 🔥 Берём лист текущего месяца
 sales_sheet = spreadsheet.worksheet(current_month)
-plans_sheet = spreadsheet.worksheet("Планы")
+plans_sheet = spreadsheet.worksheet("Годовой план 26")
 
 sales = sales_sheet.get_all_records()
 plans = plans_sheet.get_all_records()
