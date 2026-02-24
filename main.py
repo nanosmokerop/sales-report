@@ -23,7 +23,7 @@ spreadsheet = client.open(SHEET_NAME)
 
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
-current_month = today.strftime("%m.%Y")
+current_month = "ОПТ Февраль 2026"
 
 # 🔥 Берём лист текущего месяца
 sales_sheet = spreadsheet.worksheet(current_month)
