@@ -9,6 +9,7 @@ import calendar
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 SHEET_NAME = os.environ["SHEET_NAME"]
+PLAN = float(os.environ["PLAN"])  # 🔥 общий план
 
 scope = [
     "https://spreadsheets.google.com/feeds",
@@ -25,14 +26,12 @@ spreadsheet = client.open(SHEET_NAME)
 today = datetime.now()
 today_str = today.strftime("%d.%m.%Y")
 
-# ⚠️ МЕНЯТЬ КАЖДЫЙ МЕСЯЦ
+# ⚠️ Меняй каждый месяц
 current_month = "ОПТ Февраль 2026"
 
 sales_sheet = spreadsheet.worksheet(current_month)
-
 rows = sales_sheet.get_all_values()
 
-# данные начинаются с 5 строки (как у тебя на скрине)
 data_rows = rows[4:]
 
 sales = []
@@ -41,15 +40,14 @@ for row in data_rows:
     if len(row) < 10:
         continue
 
-    manager = row[0]      # колонка A
-    date = row[1]         # колонка B
-    amount = row[9]       # колонка J (Оплата)
+    manager = row[0]
+    date = row[1]
+    amount = row[9]
 
     if not manager or not amount:
         continue
 
     try:
-        # очищаем "р. 85 675" → 85675
         cleaned = re.sub(r"[^\d.,]", "", str(amount))
         cleaned = cleaned.replace(" ", "").replace(",", ".")
         amount = float(cleaned)
@@ -79,13 +77,15 @@ for manager in managers:
         if row["Менеджер"] == manager
     )
 
+    percent = round((month_sum / PLAN) * 100, 1) if PLAN else 0
+
     message += (
         f"{manager}\n"
         f"Сегодня: {int(today_sum):,}\n"
-        f"Месяц: {int(month_sum):,}\n\n"
+        f"Месяц: {int(month_sum):,} / {int(PLAN):,}\n"
+        f"Выполнение: {percent}%\n\n"
     )
 
-# Проверка последний ли день месяца
 last_day = calendar.monthrange(today.year, today.month)[1]
 if today.day == last_day:
     message += "🏁 Итог месяца сформирован\n"
